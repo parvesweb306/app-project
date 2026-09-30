@@ -1,0 +1,9 @@
+<resources>
+
+    <string name="app_name">Enjoy Your Sexy Life</string>
+
+    <string name="accessibility_service_description">
+        Keeps this device on the parent-enabled parental-control lock screen while a lock is active.
+    </string>
+
+</resources>
