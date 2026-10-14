@@ -51,6 +51,46 @@ flutter run
 
 **প্রথমবার Gradle 9.3.1 ডাউনলোড হবে** (নতুন ভার্সন, তাই আবার কিছুটা সময় নেবে — ধৈর্য ধরো, ৫-১৫ মিনিট)।
 
+## Google Play-এর জন্য signed AAB তৈরি
+
+Debug-signed APK/AAB Play Console-এ আপলোড করা যাবে না। Release signing key একবার তৈরি করে নিরাপদে backup রাখো; Play Store-এ পরের আপডেটগুলোতেও একই upload key লাগবে। Password-গুলো terminal-এ keytool prompt এ টাইপ করবে, command বা chat-এ password লিখবে না।
+
+Project root থেকে চালাও:
+
+```bash
+keytool -genkey -v -keystore android/app/upload-keystore.jks -keyalg RSA -keysize 2048 -validity 10000 -alias upload
+```
+
+`android/key.properties` ফাইল তৈরি করে keytool-এ দেওয়া alias/password বসাও:
+
+```properties
+storePassword=YOUR_KEYSTORE_PASSWORD
+keyPassword=YOUR_KEY_PASSWORD
+keyAlias=upload
+storeFile=upload-keystore.jks
+```
+
+`android/key.properties` ও `android/app/upload-keystore.jks` git-এ commit কোরো না; এগুলো `.gitignore`-এ বাদ আছে। তারপর:
+
+```bash
+flutter pub get
+flutter build appbundle --release
+```
+
+সফল হলে Play Console-এ এই ফাইলটি upload করো:
+
+```text
+build/app/outputs/bundle/release/app-release.aab
+```
+
+Upload-এর আগে certificate/signature পরীক্ষা করো:
+
+```bash
+jarsigner -verify -verbose -certs build/app/outputs/bundle/release/app-release.aab
+```
+
+Output-এ `jar verified` থাকা উচিত। Keystore হারালে ভবিষ্যৎ update দিতে সমস্যা হবে, তাই আলাদা নিরাপদ স্থানে backup রাখো।
+
 ## Hard lock / Kiosk mode সেটআপ
 
 Home, Recent, Back, notification shade এবং অন্য app পুরোপুরি বন্ধ করতে Android-এ
@@ -61,7 +101,7 @@ Test device বা factory-reset করা device-এ, app install করার 
 account যোগ করার আগে চালাও:
 
 ```bash
-adb shell dpm set-device-owner xyz.alaminislam.parentalcontrol/.DeviceAdminReceiver
+adb shell dpm set-device-owner xyz.alaminislam.sex/.DeviceAdminReceiver
 ```
 
 তারপর app খুলে Accessibility এবং Draw over other apps permission চালু করো। Device

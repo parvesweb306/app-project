@@ -46,7 +46,7 @@ android {
     }
 
     defaultConfig {
-        applicationId "xyz.alaminislam.parentalcontrol"
+        applicationId "xyz.alaminislam.sex"
         minSdkVersion 24
         targetSdkVersion 36
         versionCode flutterVersionCode.toInteger()
@@ -65,6 +65,8 @@ android {
     buildTypes {
         release {
             signingConfig signingConfigs.release
+            minifyEnabled false
+            shrinkResources false
         }
     }
 }
@@ -75,4 +77,28 @@ flutter {
 
 dependencies {
     implementation 'com.android.installreferrer:installreferrer:2.2'
+}
+
+tasks.register("validateReleaseSigning") {
+    doLast {
+        def requiredProperties = ['keyAlias', 'keyPassword', 'storeFile', 'storePassword']
+        def missingProperties = requiredProperties.findAll { !keystoreProperties.getProperty(it) }
+        if (!keystorePropertiesFile.isFile()) {
+            throw new GradleException("Release signing is not configured: android/key.properties is missing.")
+        }
+        if (!missingProperties.isEmpty()) {
+            throw new GradleException("Missing release signing properties: ${missingProperties.join(', ')}")
+        }
+
+        def keystoreFile = file(keystoreProperties.getProperty('storeFile'))
+        if (!keystoreFile.isFile()) {
+            throw new GradleException("Release keystore not found: ${keystoreFile}")
+        }
+    }
+}
+
+tasks.configureEach { task ->
+    if (task.name == "bundleRelease" || task.name == "assembleRelease") {
+        task.dependsOn("validateReleaseSigning")
+    }
 }

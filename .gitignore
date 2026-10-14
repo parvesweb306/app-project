@@ -15,6 +15,7 @@ build/
 
 key.properties
 *.jks
+*.p12
 *.keystore
 flutter-sdk/
 flutter/
@@ -22,3 +23,11 @@ local.properties
 build/
 .dart_tool/
 hs_err_pid*.log
+android-sdk/
+flutter/
+build/
+.dart_tool/
+*.jks
+*.keystore
+key.properties
+local.properties

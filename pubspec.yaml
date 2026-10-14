@@ -1,9 +1,10 @@
+
 name: sexy_app
 
 description: Enjoy Your Sexy Life
 
 publish_to: 'none'
-  
+
 version: 1.0.0+1
 
 environment:
@@ -27,5 +28,6 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+
   assets:
     - assets/icon.jpg
