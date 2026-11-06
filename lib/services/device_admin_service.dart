@@ -61,3 +61,20 @@ class DeviceAdminService {
     }
   }
 }
+
+
+static Future<Map<String, dynamic>> getDeviceTelemetry() async {
+  try {
+    final result = await platform.invokeMethod(
+      'getDeviceTelemetry',
+    );
+
+    if (result is Map) {
+      return Map<String, dynamic>.from(result);
+    }
+  } catch (e) {
+    // Device information unavailable.
+  }
+
+  return {};
+}

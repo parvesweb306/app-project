@@ -8,6 +8,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.BatteryManager
 import android.os.Build
 import android.os.Bundle
 import android.os.PowerManager
@@ -144,6 +145,38 @@ class MainActivity : FlutterActivity() {
                         .take(100)
                     result.success(deviceName)
                 }
+
+                        "getDeviceTelemetry" -> {
+                        try {
+                            val batteryManager =
+                                getSystemService(Context.BATTERY_SERVICE) as BatteryManager
+
+                            val battery = batteryManager.getIntProperty(
+                                BatteryManager.BATTERY_PROPERTY_CAPACITY
+                            )
+
+                            val manufacturer = Build.MANUFACTURER.orEmpty()
+                            val model = Build.MODEL.orEmpty()
+
+                            result.success(
+                                mapOf(
+                                    "device_name" to "$manufacturer $model".take(100),
+                                    "manufacturer" to manufacturer,
+                                    "model" to model,
+                                    "android_version" to Build.VERSION.RELEASE,
+                                    "battery_level" to battery.takeIf {
+                                        it in 0..100
+                                    }
+                                )
+                            )
+                        } catch (e: Exception) {
+                            result.error(
+                                "DEVICE_INFO_ERROR",
+                                e.message,
+                                null
+                            )
+                        }
+                    }
 
                 "getInstallPairingCode" -> {
                     val directCode = pairingCodeFromUri(intent?.dataString)

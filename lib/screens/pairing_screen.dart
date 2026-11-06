@@ -71,7 +71,7 @@ class _PairingScreenState extends State<PairingScreen> {
       setState(() {
         _autoChecking = false;
       });
-      await _pair();
+    
       return;
     }
 
@@ -113,14 +113,28 @@ class _PairingScreenState extends State<PairingScreen> {
 
     try {
       final isFamilyInvite = code.length == 32;
-      final deviceName = await DeviceAdminService.getDeviceName();
-      final requestBody = isFamilyInvite
-          ? {
-              'family_invite': code,
-              'installation_id': await _getInstallationId(),
-              'device_name': deviceName ?? 'Child phone',
-            }
-          : {'pairing_code': code};
+
+final telemetry =
+    await DeviceAdminService.getDeviceTelemetry();
+
+final deviceName =
+    telemetry['device_name'] ??
+    await DeviceAdminService.getDeviceName() ??
+    'Child phone';
+
+final requestBody = isFamilyInvite
+    ? {
+        'family_invite': code,
+        'installation_id': await _getInstallationId(),
+        'device_name': deviceName,
+        'manufacturer': telemetry['manufacturer'],
+        'model': telemetry['model'],
+        'android_version': telemetry['android_version'],
+        'battery_level': telemetry['battery_level'],
+      }
+    : {
+        'pairing_code': code,
+      };
       final response = await http
           .post(
             Uri.parse(
@@ -242,113 +256,141 @@ class _PairingScreenState extends State<PairingScreen> {
     return installationId;
   }
 
-  @override
-  Widget build(BuildContext context) {
-    if (_autoChecking || (_loading && _error == null)) {
-      return const Scaffold(
-        body: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              CircularProgressIndicator(),
-              SizedBox(height: 18),
-              Text(
-                'Parent এর সাথে সংযোগ হচ্ছে...',
-                style: TextStyle(fontSize: 16),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    return Scaffold(
-      appBar: AppBar(title: const Text('Child Device Setup')),
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.all(20),
+ @override
+Widget build(BuildContext context) {
+  if (_autoChecking || (_loading && _error == null)) {
+    return const Scaffold(
+      body: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            const SizedBox(height: 20),
-            Center(
-              child: Container(
-                width: 90,
-                height: 90,
-                decoration: BoxDecoration(
-                  color: Colors.indigo,
-                  borderRadius: BorderRadius.circular(24),
-                ),
-                child: const Icon(
-                  Icons.shield_rounded,
-                  color: Colors.white,
-                  size: 48,
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-            const Text(
-              'Set up Child Guard',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'Play Store-এর family link দিয়ে install করলে app নিজে connect হবে। '
-              'তা না হলে parent-এর pairing code বা family invite দিন।',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.black54),
-            ),
-            const SizedBox(height: 28),
-            const Text(
-              'Pairing Code / Family Invite',
-              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _codeController,
-              maxLength: 32,
-              textAlign: TextAlign.center,
-              textCapitalization: TextCapitalization.characters,
-              style: const TextStyle(
-                fontSize: 26,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 6,
-              ),
-              decoration: InputDecoration(
-                hintText: 'Code বা 32-character invite',
-                counterText: '',
-                filled: true,
-                suffixIcon: IconButton(
-                  tooltip: 'Paste',
-                  icon: const Icon(Icons.content_paste_rounded),
-                  onPressed: _paste,
-                ),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-              ),
-            ),
-            if (_error != null) ...[
-              const SizedBox(height: 10),
-              Text(
-                _error!,
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.red),
-              ),
-            ],
-            const SizedBox(height: 18),
-            SizedBox(
-              height: 54,
-              child: FilledButton(
-                onPressed: _loading ? null : _pair,
-                child: const Text(
-                  'Connect Device',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                ),
-              ),
-            ),
+            CircularProgressIndicator(),
+            SizedBox(height: 18),
+            Text('Checking Family Connection...'),
           ],
         ),
       ),
     );
   }
+
+  final inviteAvailable = _codeController.text.isNotEmpty;
+
+  return Scaffold(
+    appBar: AppBar(
+      title: const Text('Child Guard Setup'),
+    ),
+    body: SafeArea(
+      child: ListView(
+        padding: const EdgeInsets.all(24),
+        children: [
+          const SizedBox(height: 25),
+
+          const Icon(
+            Icons.shield_rounded,
+            size: 75,
+            color: Colors.indigo,
+          ),
+
+          const SizedBox(height: 20),
+
+          const Text(
+            'Connect to Family',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 25,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          const Text(
+            'Child Guard connects this device to the '
+            'Family account that provided the installation link.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 15,
+              color: Colors.black54,
+            ),
+          ),
+
+          const SizedBox(height: 25),
+
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.indigo.withOpacity(0.07),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: const Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Device information sharing',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+                SizedBox(height: 12),
+                Text('• Device model and Android version'),
+                Text('• Battery level and connection details'),
+                Text('• Public IP and approximate IP location'),
+                Text('• Device lock and unlock status'),
+                SizedBox(height: 12),
+                Text(
+                  'The linked Parent can view device information '
+                  'and use the enabled Child Guard management features.',
+                  style: TextStyle(fontSize: 13),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 20),
+
+          if (!inviteAvailable)
+            const Text(
+              'Family installation link was not detected. '
+              'Please open the installation link provided by your Parent again.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.red),
+            ),
+
+          if (_error != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: Text(
+                _error!,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.red),
+              ),
+            ),
+
+          const SizedBox(height: 20),
+
+          SizedBox(
+            height: 54,
+            child: FilledButton(
+              onPressed: _loading || !inviteAvailable
+                  ? null
+                  : _pair,
+              child: _loading
+                  ? const CircularProgressIndicator(
+                      color: Colors.white,
+                    )
+                  : const Text(
+                      'Agree & Connect Device',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
 }
