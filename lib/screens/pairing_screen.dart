@@ -1,4 +1,7 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
+import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -98,7 +101,7 @@ class _PairingScreenState extends State<PairingScreen> {
 
     if (!_codePattern.hasMatch(code)) {
       setState(() {
-        _error = '৬ অক্ষরের pairing code দিন';
+        _error = '৬ অক্ষরের pairing code অথবা family invite দিন';
       });
       return;
     }
@@ -111,54 +114,96 @@ class _PairingScreenState extends State<PairingScreen> {
     try {
       final isFamilyInvite = code.length == 32;
       final deviceName = await DeviceAdminService.getDeviceName();
+      final requestBody = isFamilyInvite
+          ? {
+              'family_invite': code,
+              'installation_id': await _getInstallationId(),
+              'device_name': deviceName ?? 'Child phone',
+            }
+          : {'pairing_code': code};
       final response = await http
           .post(
             Uri.parse(
-              '${ApiConfig.baseUrl}/devices/${isFamilyInvite ? 'join-family' : 'pair'}',
+              '${ApiConfig.baseUrl}/devices/${isFamilyInvite ? 'enroll-family' : 'pair'}',
             ),
             headers: {
               'Content-Type': 'application/json',
               'Accept': 'application/json',
             },
-            body: jsonEncode(
-              isFamilyInvite
-                  ? {
-                      'family_invite': code,
-                      'device_name': deviceName ?? 'Child phone',
-                    }
-                  : {'pairing_code': code},
-            ),
+            body: jsonEncode(requestBody),
           )
           .timeout(const Duration(seconds: 10));
 
+      final decoded = jsonDecode(response.body);
+      if (decoded is! Map<String, dynamic>) {
+        throw const FormatException('Unexpected pairing response.');
+      }
+
       if (response.statusCode != 200) {
+        if (!mounted) return;
         setState(() {
-          _error = 'ভুল বা মেয়াদোত্তীর্ণ pairing code';
+          _error = decoded['error']?.toString() ??
+              decoded['message']?.toString() ??
+              'Pairing করা যায়নি (${response.statusCode})';
         });
         return;
       }
 
-      final data = jsonDecode(response.body);
-      final token = data['device_token']?.toString();
+      final token = decoded['device_token']?.toString();
 
       if (token == null || token.isEmpty) {
-        setState(() {
-          _error = 'Server থেকে device token পাওয়া যায়নি';
-        });
-        return;
+        throw const FormatException(
+          'Server response did not contain a device token.',
+        );
       }
 
+      if (!mounted) return;
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('device_token', token);
 
-      await DeviceAdminService.saveDeviceToken(token);
-      await DeviceAdminService.setPaired(true);
+      if (!await DeviceAdminService.saveDeviceToken(token)) {
+        throw PlatformException(
+          code: 'DEVICE_TOKEN_SAVE_FAILED',
+          message: 'এই ফোনে device token সংরক্ষণ করা যায়নি।',
+        );
+      }
+      if (!await DeviceAdminService.setPaired(true)) {
+        throw PlatformException(
+          code: 'PAIRING_STATE_SAVE_FAILED',
+          message: 'এই ফোনে paired state সংরক্ষণ করা যায়নি।',
+        );
+      }
 
       widget.onPaired();
-    } catch (_) {
+    } on TimeoutException {
+      if (!mounted) return;
       setState(() {
-        _error =
-            'Server-এর সাথে সংযোগ করা যায়নি। Internet চালু আছে কিনা দেখুন';
+        _error = 'Server response দিতে দেরি হচ্ছে। আবার চেষ্টা করুন।';
+      });
+    } on SocketException {
+      if (!mounted) return;
+      setState(() {
+        _error = 'Internet connection নেই। সংযোগ করে আবার চেষ্টা করুন।';
+      });
+    } on http.ClientException {
+      if (!mounted) return;
+      setState(() {
+        _error = 'Server-এর সাথে সংযোগ করা যায়নি। পরে আবার চেষ্টা করুন।';
+      });
+    } on FormatException {
+      if (!mounted) return;
+      setState(() {
+        _error = 'Server-এর response বোঝা যায়নি। পরে আবার চেষ্টা করুন।';
+      });
+    } on PlatformException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _error = error.message ?? 'এই ফোনের pairing তথ্য পড়া যায়নি।';
+      });
+    } on Exception catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _error = 'Pairing ব্যর্থ হয়েছে: $error';
       });
     } finally {
       if (mounted) {
@@ -167,6 +212,34 @@ class _PairingScreenState extends State<PairingScreen> {
         });
       }
     }
+  }
+
+  Future<String> _getInstallationId() async {
+    final prefs = await SharedPreferences.getInstance();
+    final existingId = prefs.getString('installation_id');
+    if (existingId != null && existingId.isNotEmpty) {
+      return existingId;
+    }
+
+    final bytes = List<int>.generate(
+      16,
+      (_) => Random.secure().nextInt(256),
+    );
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    final hex = bytes
+        .map((byte) => byte.toRadixString(16).padLeft(2, '0'))
+        .join();
+    final installationId = [
+      hex.substring(0, 8),
+      hex.substring(8, 12),
+      hex.substring(12, 16),
+      hex.substring(16, 20),
+      hex.substring(20),
+    ].join('-');
+
+    await prefs.setString('installation_id', installationId);
+    return installationId;
   }
 
   @override
@@ -219,7 +292,8 @@ class _PairingScreenState extends State<PairingScreen> {
             ),
             const SizedBox(height: 8),
             const Text(
-              'Parent-এর device code বা family invite এখানে বসান।',
+              'Play Store-এর family link দিয়ে install করলে app নিজে connect হবে। '
+              'তা না হলে parent-এর pairing code বা family invite দিন।',
               textAlign: TextAlign.center,
               style: TextStyle(color: Colors.black54),
             ),

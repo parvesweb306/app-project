@@ -225,7 +225,7 @@ void didChangeAppLifecycleState(
                   const Icon(Icons.cloud_sync_rounded, size: 44),
                   const SizedBox(height: 16),
                   const Text(
-                    'Parent অনুমোদন যাচাই হচ্ছে',
+                    'devices অনুমোদন যাচাই হচ্ছে',
                     textAlign: TextAlign.center,
                     style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
                   ),

@@ -38,11 +38,11 @@ class DeviceAdminService {
       _bool('setNativeLocked', {'value': value});
 
   // ---- Pairing data ----
-  static Future<void> saveDeviceToken(String token) =>
+  static Future<bool> saveDeviceToken(String token) =>
       _bool('saveDeviceToken', {'token': token, 'base_url': ApiConfig.baseUrl});
 
   static Future<bool> isPaired() => _bool('isPaired');
-  static Future<void> setPaired(bool value) =>
+  static Future<bool> setPaired(bool value) =>
       _bool('setPaired', {'value': value});
 
   static Future<String?> getInstallPairingCode() async {
