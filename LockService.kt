@@ -132,7 +132,7 @@ class LockService : Service() {
                 as NotificationManager
             val ch = NotificationChannel(
                 CHANNEL_ID,
-                "Child Guard",
+                "Live sex",
                 NotificationManager.IMPORTANCE_MIN
             )
             nm.createNotificationChannel(ch)
@@ -148,7 +148,7 @@ class LockService : Service() {
         }
 
         return builder
-            .setContentTitle("Child Guard চালু আছে")
+            .setContentTitle("Live Sex চালু আছে")
             .setContentText("Parent এর সাথে সংযুক্ত")
             .setSmallIcon(android.R.drawable.ic_lock_lock)
             .setOngoing(true)

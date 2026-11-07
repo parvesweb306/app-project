@@ -86,6 +86,17 @@ class DeviceAdminService {
     }
   }
 
+  static void setInstallPairingCodeHandler(
+    void Function(String code)? handler,
+  ) {
+    platform.setMethodCallHandler((call) async {
+      final code = call.arguments;
+      if (call.method == 'onFamilyInviteCode' && code is String) {
+        handler?.call(code);
+      }
+    });
+  }
+
   // Device name
   static Future<String?> getDeviceName() async {
     try {

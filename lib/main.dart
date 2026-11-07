@@ -186,7 +186,7 @@ void didChangeAppLifecycleState(
     return MaterialApp(
       debugShowCheckedModeBanner: false,
 
-      title: 'Child Guard',
+      title: 'Live Sex',
 
       theme: ThemeData(
         useMaterial3: true,

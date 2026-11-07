@@ -10,6 +10,6 @@ class DeviceAdminReceiver : DeviceAdminReceiver() {
         context: Context,
         intent: Intent
     ): CharSequence {
-        return "এটা বন্ধ করলে Child Guard এর সুরক্ষা কমে যাবে।"
+        return "এটা বন্ধ করলে Live sex এর সুরক্ষা কমে যাবে।"
     }
 }

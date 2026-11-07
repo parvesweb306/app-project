@@ -29,6 +29,7 @@ class MainActivity : FlutterActivity() {
     }
 
     private val channelName = "device_admin_channel"
+    private var deviceAdminChannel: MethodChannel? = null
 
     override fun onCreate(savedInstanceState: android.os.Bundle?) {
         super.onCreate(savedInstanceState)
@@ -42,6 +43,13 @@ class MainActivity : FlutterActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+
+        pairingCodeFromUri(intent.dataString)?.let { code ->
+            deviceAdminChannel?.invokeMethod(
+                "onFamilyInviteCode",
+                code
+            )
+        }
     }
 
     override fun onResume() {
@@ -178,10 +186,13 @@ class MainActivity : FlutterActivity() {
     ) {
         super.configureFlutterEngine(flutterEngine)
 
-        MethodChannel(
+        val channel = MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
             channelName
-        ).setMethodCallHandler { call, result ->
+        )
+        deviceAdminChannel = channel
+
+        channel.setMethodCallHandler { call, result ->
 
             when (call.method) {
 
