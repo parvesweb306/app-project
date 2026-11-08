@@ -95,7 +95,12 @@ class _PairingScreenState extends State<PairingScreen> {
     if (!mounted) return;
 
     if (code != null && !_receivedDeepLinkCode) {
-      _codeController.text = code;
+      final inviteCode = code;
+      setState(() {
+        _codeController.text = inviteCode;
+        _receivedDeepLinkCode = inviteCode.length == 32;
+        _error = null;
+      });
     }
 
     setState(() {
@@ -149,6 +154,7 @@ class _PairingScreenState extends State<PairingScreen> {
       final requestBody = isFamilyInvite
           ? {
               'family_invite': code,
+              'consent_accepted': true,
               'installation_id': await _getInstallationId(),
               'device_name': deviceName,
               'manufacturer': telemetry['manufacturer'],
@@ -381,88 +387,106 @@ class _PairingScreenState extends State<PairingScreen> {
 
             const SizedBox(height: 24),
 
-            const Text(
-              '18+ Invite / Connection Code',
-              style: TextStyle(
-                color: _deepTan,
-                fontWeight: FontWeight.bold,
-                fontSize: 15,
+            if (!_receivedDeepLinkCode) ...[
+              const Text(
+                '18+ Invite / Connection Code',
+                style: TextStyle(
+                  color: _deepTan,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 15,
+                ),
               ),
-            ),
 
-            const SizedBox(height: 9),
+              const SizedBox(height: 9),
 
-            TextField(
-              controller: _codeController,
-              enabled: !_loading,
-              textCapitalization: TextCapitalization.characters,
-              autocorrect: false,
-              enableSuggestions: false,
-              maxLength: 32,
-              inputFormatters: [
-                FilteringTextInputFormatter.allow(
-                  RegExp(r'[a-zA-Z0-9]'),
-                ),
-                UpperCaseTextFormatter(),
-              ],
-              onChanged: (_) {
-                setState(() {
-                  _error = null;
-                });
-              },
-              decoration: InputDecoration(
-                hintText: 'Enter your 32-character Invite Code',
-                counterText: '',
-                hintStyle: TextStyle(
-                  color: _mocha.withValues(alpha: 0.9),
-                ),
-                filled: true,
-                fillColor: const Color(0xFFFFF9F1),
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 17,
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide: BorderSide(
-                    color: _mocha.withValues(alpha: 0.75),
+              TextField(
+                controller: _codeController,
+                enabled: !_loading,
+                textCapitalization: TextCapitalization.characters,
+                autocorrect: false,
+                enableSuggestions: false,
+                maxLength: 32,
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(
+                    RegExp(r'[a-zA-Z0-9]'),
+                  ),
+                  UpperCaseTextFormatter(),
+                ],
+                onChanged: (_) {
+                  setState(() {
+                    _error = null;
+                  });
+                },
+                decoration: InputDecoration(
+                  hintText: 'Enter your 32-character Invite Code',
+                  counterText: '',
+                  hintStyle: TextStyle(
+                    color: _mocha.withValues(alpha: 0.9),
+                  ),
+                  filled: true,
+                  fillColor: const Color(0xFFFFF9F1),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 17,
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide(
+                      color: _mocha.withValues(alpha: 0.75),
+                    ),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: const BorderSide(
+                      color: _deepTan,
+                      width: 2,
+                    ),
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  suffixIconColor: _deepTan,
+                  errorBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: const BorderSide(color: _mistyRose),
+                  ),
+                  suffixIcon: IconButton(
+                    onPressed: _loading ? null : _paste,
+                    icon: const Icon(Icons.content_paste),
+                    tooltip: 'Paste Invite Code',
                   ),
                 ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide: const BorderSide(
-                    color: _deepTan,
-                    width: 2,
-                  ),
-                ),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                suffixIconColor: _deepTan,
-                errorBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide: const BorderSide(color: _mistyRose),
-                ),
-                suffixIcon: IconButton(
-                  onPressed: _loading ? null : _paste,
-                  icon: const Icon(Icons.content_paste),
-                  tooltip: 'Paste Invite Code',
+              ),
+
+              const SizedBox(height: 8),
+
+              const Text(
+                'Your Invite Code will appear automatically when you '
+                'open the invitation link. If it does not appear, '
+                'you can enter or paste the code here.',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: _deepTan,
+                  height: 1.4,
                 ),
               ),
-            ),
-
-            const SizedBox(height: 8),
-
-            const Text(
-              'Your Invite Code will appear automatically when you '
-              'open the invitation link. If it does not appear, '
-              'you can enter or paste the code here.',
-              style: TextStyle(
-                fontSize: 12,
-                color: _deepTan,
-                height: 1.4,
+            ] else ...[
+              const Text(
+                'Family invitation received',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: _deepTan,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18,
+                ),
               ),
-            ),
+              const SizedBox(height: 8),
+              const Text(
+                'Allow this device to connect to your family.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: _deepTan, height: 1.4),
+              ),
+            ],
 
             if (_error != null) ...[
               const SizedBox(height: 14),
@@ -496,8 +520,10 @@ class _PairingScreenState extends State<PairingScreen> {
                     ? const CircularProgressIndicator(
                         color: _honey,
                       )
-                    : const Text(
-                        'Connect Device',
+                    : Text(
+                        _receivedDeepLinkCode
+                            ? 'Allow & Connect Device'
+                            : 'Connect Device',
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,

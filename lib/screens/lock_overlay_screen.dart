@@ -29,9 +29,9 @@ class _LockOverlayScreenState
   Future<void> _unlock() async {
     final code = _codeController.text.trim();
 
-    if (!RegExp(r'^\d{6}$').hasMatch(code)) {
+    if (!RegExp(r'^\d{5}$').hasMatch(code)) {
       setState(() {
-        _error = '৬ ডিজিটের Unlock Code দিন';
+        _error = '৫ ডিজিটের Unlock Code দিন';
       });
 
       return;
@@ -185,7 +185,7 @@ class _LockOverlayScreenState
                         controller: _codeController,
                         keyboardType:
                             TextInputType.number,
-                        maxLength: 6,
+                        maxLength: 5,
                         obscureText: true,
                         textAlign: TextAlign.center,
                         style: const TextStyle(
@@ -195,7 +195,7 @@ class _LockOverlayScreenState
                           letterSpacing: 8,
                         ),
                         decoration: InputDecoration(
-                          hintText: '000000',
+                          hintText: '00000',
                           hintStyle: const TextStyle(
                             color: Colors.white24,
                             letterSpacing: 8,
