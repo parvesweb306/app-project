@@ -81,7 +81,11 @@ class _PairingScreenState extends State<PairingScreen> {
   }
 
   Future<void> _tryClipboardAndPair() async {
-    var code = await DeviceAdminService.getInstallPairingCode();
+    String? code;
+
+    try {
+      code = await DeviceAdminService.getInstallPairingCode();
+    } catch (_) {}
 
     if (code == null) {
       await Future.delayed(const Duration(milliseconds: 500));
@@ -175,7 +179,7 @@ class _PairingScreenState extends State<PairingScreen> {
         throw const FormatException('Unexpected pairing response.');
       }
 
-      if (response.statusCode != 200) {
+      if (response.statusCode < 200 || response.statusCode >= 300) {
         if (!mounted) return;
 
         setState(() {
