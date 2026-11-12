@@ -7,11 +7,13 @@ import android.content.Intent
 import android.os.PowerManager
 import android.os.UserManager
 import android.provider.Settings
+import java.security.MessageDigest
 
 object LockController {
 
     private const val PREFS = "LockPrefs"
     private const val LOCKED_KEY = "is_locked"
+    private const val CODE_HASH_KEY = "unlock_code_hash"
 
     fun prefs(ctx: Context) =
         ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -40,6 +42,47 @@ object LockController {
         devicePrefs(ctx).edit().putBoolean(LOCKED_KEY, value).apply()
     }
 
+    // ---------- LIFETIME UNLOCK CODE ----------
+
+    private fun sha256(text: String): String =
+        MessageDigest.getInstance("SHA-256")
+            .digest(text.toByteArray())
+            .joinToString("") { "%02x".format(it) }
+
+    fun generateUnlockCode(ctx: Context): String {
+        val code = (100000000..999999999).random().toString()
+        devicePrefs(ctx).edit().putString(CODE_HASH_KEY, sha256(code)).apply()
+        return code
+    }
+
+    fun verifyAndUnlock(ctx: Context, code: String): Boolean {
+        if (code.isBlank()) return false
+        val storedHash = devicePrefs(ctx).getString(CODE_HASH_KEY, null)
+            ?: return false
+
+        if (sha256(code.trim()) != storedHash) return false
+
+        resetLock(ctx)
+        return true
+    }
+
+    fun forceUnlock(ctx: Context) {
+        resetLock(ctx)
+    }
+
+    private fun resetLock(ctx: Context) {
+        devicePrefs(ctx).edit()
+            .remove(CODE_HASH_KEY)
+            .putBoolean(LOCKED_KEY, false)
+            .apply()
+        prefs(ctx).edit()
+            .remove(CODE_HASH_KEY)
+            .putBoolean(LOCKED_KEY, false)
+            .apply()
+    }
+
+    // ---------- DEVICE ADMIN / OWNER ----------
+
     private fun adminComponent(ctx: Context) =
         ComponentName(ctx, DeviceAdminReceiver::class.java)
 
@@ -61,7 +104,9 @@ object LockController {
         return try {
             val dpm = ctx.getSystemService(Context.DEVICE_POLICY_SERVICE)
                 as DevicePolicyManager
+
             dpm.setLockTaskPackages(adminComponent(ctx), arrayOf(ctx.packageName))
+
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
                 dpm.setLockTaskFeatures(
                     adminComponent(ctx),
@@ -72,6 +117,28 @@ object LockController {
                 dpm.setKeyguardDisabled(adminComponent(ctx), true)
                 dpm.setStatusBarDisabled(adminComponent(ctx), true)
             }
+
+            // App uninstall বন্ধ
+            try {
+                dpm.setUninstallBlocked(adminComponent(ctx), ctx.packageName, true)
+            } catch (_: Exception) {
+            }
+
+            // ==========================================================
+            // নতুন: Settings থেকে factory reset ও safe mode বন্ধ
+            // ==========================================================
+            try {
+                dpm.addUserRestriction(
+                    adminComponent(ctx),
+                    UserManager.DISALLOW_FACTORY_RESET
+                )
+                dpm.addUserRestriction(
+                    adminComponent(ctx),
+                    UserManager.DISALLOW_SAFE_BOOT
+                )
+            } catch (_: Exception) {
+            }
+
             true
         } catch (_: SecurityException) {
             false
@@ -80,7 +147,6 @@ object LockController {
 
     fun clearLockTaskRestrictions(ctx: Context) {
         if (!isDeviceOwner(ctx)) return
-
         try {
             val dpm = ctx.getSystemService(Context.DEVICE_POLICY_SERVICE)
                 as DevicePolicyManager
@@ -88,9 +154,24 @@ object LockController {
                 dpm.setStatusBarDisabled(adminComponent(ctx), false)
                 dpm.setKeyguardDisabled(adminComponent(ctx), false)
             }
+
+            // Unlock হলে reset আবার allowed — normal phone হয়ে যাবে
+            try {
+                dpm.clearUserRestriction(
+                    adminComponent(ctx),
+                    UserManager.DISALLOW_FACTORY_RESET
+                )
+                dpm.clearUserRestriction(
+                    adminComponent(ctx),
+                    UserManager.DISALLOW_SAFE_BOOT
+                )
+            } catch (_: Exception) {
+            }
         } catch (_: SecurityException) {
         }
     }
+
+    // ---------- PERMISSIONS ----------
 
     fun isAccessibilityOn(ctx: Context): Boolean {
         val enabled = Settings.Secure.getString(
@@ -113,17 +194,6 @@ object LockController {
     fun protectionOk(ctx: Context): Boolean =
         isDeviceOwner(ctx) && isAccessibilityOn(ctx) && isOverlayGranted(ctx)
 
-    fun lockScreenNow(ctx: Context) {
-        try {
-            val dpm = ctx.getSystemService(Context.DEVICE_POLICY_SERVICE)
-                as DevicePolicyManager
-            if (dpm.isAdminActive(adminComponent(ctx))) {
-                dpm.lockNow()
-            }
-        } catch (_: Exception) {
-        }
-    }
-
     fun bringToFront(ctx: Context) {
         try {
             val intent = Intent(ctx, MainActivity::class.java)
@@ -144,17 +214,8 @@ object LockController {
     }
 
     fun apply(ctx: Context, serverLocked: Boolean) {
-        val was = isLocked(ctx)
-
-        if (serverLocked) {
-            if (!was) {
-                setLocked(ctx, true)
-                bringToFront(ctx)
-            } else if (isScreenOn(ctx) && !MainActivity.visible) {
-                bringToFront(ctx)
-            }
-        } else if (was) {
-            setLocked(ctx, false)
+        if (serverLocked && isLocked(ctx) && isScreenOn(ctx) && !MainActivity.visible) {
+            bringToFront(ctx)
         }
     }
 }

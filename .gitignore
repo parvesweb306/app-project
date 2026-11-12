@@ -31,3 +31,6 @@ build/
 *.keystore
 key.properties
 local.properties
+
+/android/key.properties
+/android/app/upload-keystore.jks

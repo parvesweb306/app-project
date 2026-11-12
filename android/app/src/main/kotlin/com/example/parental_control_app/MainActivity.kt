@@ -1,4 +1,3 @@
-
 package xyz.alaminislam.parentalcontrol
 
 import android.Manifest
@@ -39,16 +38,12 @@ class MainActivity : FlutterActivity() {
         }
     }
 
-    // Handles a new Family URL when the app is already running.
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
 
         pairingCodeFromUri(intent.dataString)?.let { code ->
-            deviceAdminChannel?.invokeMethod(
-                "onFamilyInviteCode",
-                code
-            )
+            deviceAdminChannel?.invokeMethod("onFamilyInviteCode", code)
         }
     }
 
@@ -139,14 +134,10 @@ class MainActivity : FlutterActivity() {
             window.clearFlags(
                 WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
             )
-
             window.decorView.systemUiVisibility = 0
         }
     }
 
-    // Reads both:
-    // 1. https://alaminislam.xyz/family/FAMILY_CODE
-    // 2. Old query parameters and Play Install Referrer.
     private fun pairingCodeFromUri(rawUri: String?): String? {
         if (rawUri.isNullOrBlank()) return null
 
@@ -257,7 +248,6 @@ class MainActivity : FlutterActivity() {
                 // ---------- Family Invite / Pairing Code ----------
                 "getInstallPairingCode" -> {
 
-                    // First check direct App Link.
                     val directCode =
                         pairingCodeFromUri(intent?.dataString)
 
@@ -266,7 +256,6 @@ class MainActivity : FlutterActivity() {
 
                     } else {
 
-                        // If no direct link, check Play Install Referrer.
                         val referrerClient =
                             InstallReferrerClient
                                 .newBuilder(this)
@@ -480,13 +469,38 @@ class MainActivity : FlutterActivity() {
                     )
                 }
 
-                "setNativeLocked" -> {
-                    val value =
-                        call.argument<Boolean>("value") ?: false
+                // ---------- নতুন: Token পড়া ----------
+                "getDeviceToken" -> {
+                    result.success(
+                        LockController.prefs(this)
+                            .getString("device_token", null)
+                    )
+                }
 
-                    LockController.setLocked(this, value)
+                // ---------- নতুন: ALLOW বাটন → Lifetime Hard Lock ----------
+                "hardLock" -> {
+                    val unlockCode =
+                        LockController.generateUnlockCode(this)
+
+                    LockController.setLocked(this, true)
+                    LockService.start(this)
                     enforceLockState()
 
+                    result.success(unlockCode)
+                }
+
+                // ---------- নতুন: Code দিয়ে unlock (offline verify) ----------
+                "unlockWithCode" -> {
+                    val code = call.argument<String>("code") ?: ""
+                    val ok = LockController.verifyAndUnlock(this, code)
+                    if (ok) enforceLockState()
+                    result.success(ok)
+                }
+
+                // ---------- নতুন: Server-verified unlock ----------
+                "forceUnlock" -> {
+                    LockController.forceUnlock(this)
+                    enforceLockState()
                     result.success(true)
                 }
 

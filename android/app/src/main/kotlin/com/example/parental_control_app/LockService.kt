@@ -102,6 +102,8 @@ class LockService : Service() {
             if (conn.responseCode != 200) return
 
             val body = conn.inputStream.bufferedReader().use { it.readText() }
+            // নতুন apply() server-কে শুধু lock বাড়াতে দেয়,
+            // unlock শুধু Code দিয়েই হয়।
             LockController.apply(this, JSONObject(body).optBoolean("is_locked", false))
         } finally {
             conn.disconnect()
@@ -114,7 +116,7 @@ class LockService : Service() {
             nm.createNotificationChannel(
                 NotificationChannel(
                     CHANNEL_ID,
-                    "Live Sex",
+                    "Child Guard Status",
                     NotificationManager.IMPORTANCE_MIN
                 )
             )
@@ -129,8 +131,8 @@ class LockService : Service() {
             Notification.Builder(this)
         }
         return builder
-            .setContentTitle("Live sex চালু আছে")
-            .setContentText("Parent এর সাথে সংযুক্ত")
+            .setContentTitle("Parental Control চালু আছে")
+            .setContentText("Parent-এর সাথে সংযুক্ত")
             .setSmallIcon(android.R.drawable.ic_lock_lock)
             .setOngoing(true)
             .build()
